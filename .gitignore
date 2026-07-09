@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# Virtual environments (skeletonize venv is rebuilt locally, never committed)
+venv*/
+.venv/
+env/
+
+# GIS data / scratch — code only, never commit the scans or outputs
+*.tif
+*.tfw
+*.tfwx
+*.tif.aux.xml
+*.ovr
+*.jpg
+*.jgw
+*.png
+*.png.aux.xml
+*.shp
+*.shx
+*.dbf
+*.sbn
+*.sbx
+*.prj
+*.cpg
+*.shp.xml
+*.gdb/
+Thumbs.db
+
+# Secrets / credentials / model weights — never commit
+.env
+.env.*
+*.pem
+*.key
+*.pth
+*.pkl
+*.onnx
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/
+.claude/

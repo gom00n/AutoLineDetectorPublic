@@ -1,0 +1,16 @@
+# LineDetector dependencies — TWO interpreters are used.
+#
+# 1) ArcGIS Pro python (arcgispro-py3): runs extract_lines, vectorize, corridor_recon,
+#    overlay_target, diagnostics. These ship with ArcGIS Pro — do NOT pip-install them:
+#      - arcpy          (ArcGIS Pro; RasterToPolyline works on a Basic license)
+#      - osgeo / GDAL   (bundled with ArcGIS Pro)
+#      - numpy  (1.24.x — keep < 2; base GDAL gdal_array is numpy-1.x ABI)
+#      - scipy  (ndimage: label, uniform_filter, binary_closing, convolve)
+#      - pillow (PIL, for QA PNGs)
+#
+# 2) A throwaway venv for skeletonize.py only, created against the ArcGIS python so it
+#    inherits GDAL/numpy/scipy via system-site-packages:
+#      python -m venv --system-site-packages scripts\venv_skimage
+#      scripts\venv_skimage\Scripts\pip install "scikit-image==0.24.*"
+#    (scikit-image must run on numpy < 2 here — do not upgrade numpy in this venv.)
+scikit-image==0.24.*

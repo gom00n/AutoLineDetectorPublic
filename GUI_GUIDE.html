@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LineDetector — GUI Parameter Guide</title>
+<style>
+  :root{
+    --ink:#c0392b; --scan:#b3bcc6; --good:#1e8449; --bad:#e74c3c;
+    --txt:#1a2330; --muted:#5b6775; --accent:#2563c9; --wash:#f6df8e;
+    --line:#e2e6ec; --bg:#ffffff; --soft:#f6f8fb;
+  }
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    color:var(--txt);background:var(--bg);line-height:1.62;max-width:940px;
+    margin:0 auto;padding:32px 22px 80px}
+  h1{font-size:30px;margin:0 0 4px;letter-spacing:-.4px}
+  h2{font-size:23px;margin:46px 0 6px;padding-bottom:6px;border-bottom:2px solid var(--line)}
+  h3{font-size:18px;margin:26px 0 2px}
+  p{margin:.5em 0}
+  .sub{color:var(--muted);font-size:15px;margin-top:0}
+  code{background:var(--soft);border:1px solid var(--line);border-radius:4px;
+    padding:1px 5px;font-size:.9em;font-family:Consolas,Menlo,monospace}
+  a{color:var(--accent)}
+  .rule{background:#eef4ff;border:1px solid #cfe0ff;border-left:4px solid var(--accent);
+    border-radius:8px;padding:14px 18px;margin:18px 0}
+  .rule ol{margin:6px 0 0;padding-left:20px}
+  .rule li{margin:3px 0}
+  .card{border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:18px 0;
+    background:var(--soft)}
+  .card h3{margin-top:0;display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+  .badge{font-size:11.5px;font-weight:600;border-radius:20px;padding:2px 10px;letter-spacing:.2px}
+  .b-both{background:#e7f3ec;color:#1e6b3e;border:1px solid #bfe2cd}
+  .b-9a{background:#eaf0fb;color:#274d8f;border:1px solid #cad9f3}
+  .b-5{background:#fbecea;color:#9a3a2c;border:1px solid #f1cdc6}
+  .def{font-size:12px;color:var(--muted);font-weight:500;margin-left:auto}
+  .def b{color:var(--txt)}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14.5px}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:#eef1f6}
+  .tu{color:var(--good);font-weight:600}
+  .td{color:var(--bad);font-weight:600}
+  figure{margin:14px 0 4px;text-align:center}
+  figcaption{color:var(--muted);font-size:13px;margin-top:4px}
+  svg{max-width:100%;height:auto;background:#fff;border:1px solid var(--line);border-radius:8px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:680px){.two{grid-template-columns:1fr}}
+  .s-lbl{font:600 12px sans-serif;fill:var(--txt)}
+  .s-mut{font:12px sans-serif;fill:var(--muted)}
+  .s-sm{font:11px sans-serif;fill:var(--muted)}
+  .toc a{display:inline-block;margin:2px 14px 2px 0;font-size:14px}
+  hr{border:0;border-top:1px solid var(--line);margin:34px 0}
+</style>
+</head>
+<body>
+
+<h1>LineDetector — GUI Parameter Guide</h1>
+<p class="sub">Every knob in the pipeline GUI, in plain language, with pictures — and how to label data so the results get better over time.</p>
+
+<div class="rule">
+<b>Four main rules</b>
+<ol>
+<li><b>The defaults are already tuned per project.</b> Running on defaults is the right starting point — you are not doing anything wrong.</li>
+<li><b>Change ONE thing, then re-run and look.</b> Tick the <code>overlay</code> stage and click <b>View overlay</b> to see the lines on the scan. Changing several knobs at once tells you nothing about which one helped.</li>
+<li><b>Use numbers, not just your eyes.</b> Once you have a hand-corrected reference (see the last section), the <b>Metrics…</b> button gives recall / precision / F1.</li>
+<li><b>Think in two dials:</b> <span class="tu"> <br>
+  Recall</span> = "did we catch all the real borders?" &nbsp; <br>
+   <span class="td">Precision</span> = "is everything we drew actually a border?" Most parameters trade one for the other.</li>
+</ol>
+</div>
+
+<p class="toc">
+<b>Jump to:</b>
+<a href="#flow">How the pipeline works</a>
+<a href="#dials">Recall vs precision</a>
+<a href="#detection">Detection</a>
+<a href="#skeleton">Skeleton</a>
+<a href="#bridge">Bridge</a>
+<a href="#trace">Trace</a>
+<a href="#filter">Filter</a>
+<a href="#dehair">De-hair</a>
+<a href="#snap">Snap</a>
+<a href="#io">Inputs &amp; corridor</a>
+<a href="#stages">Stages &amp; buttons</a>
+<a href="#cheat">Cheat sheet</a>
+<a href="#label">Labeling data to improve results</a>
+</p>
+
+<h2 id="flow">How the pipeline works</h2>
+<p>Each stage takes the output of the one before it. Parameters only make sense once you can see where they sit in the chain — a "Skeleton" knob can't fix something the "Detection" knob got wrong.</p>
+
+<figure>
+<svg viewBox="0 0 900 230" role="img" aria-label="Pipeline flow">
+  <defs>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa6b2"/>
+    </marker>
+  </defs>
+  <!-- row 1 -->
+  <g>
+    <rect x="14"  y="26" width="120" height="58" rx="9" fill="#fff" stroke="#b3bcc6"/>
+    <text x="74"  y="50" text-anchor="middle" class="s-lbl">Scan (RGB)</text>
+    <text x="74"  y="68" text-anchor="middle" class="s-sm">the photo of the map</text>
+
+    <rect x="166" y="26" width="120" height="58" rx="9" fill="#fdecea" stroke="#e8b6ae"/>
+    <text x="226" y="46" text-anchor="middle" class="s-lbl">Extract</text>
+    <text x="226" y="62" text-anchor="middle" class="s-sm">ink → black/white</text>
+    <text x="226" y="76" text-anchor="middle" class="s-sm">mask</text>
+
+    <rect x="318" y="26" width="120" height="58" rx="9" fill="#fff" stroke="#b3bcc6"/>
+    <text x="378" y="46" text-anchor="middle" class="s-lbl">Skeletonize</text>
+    <text x="378" y="64" text-anchor="middle" class="s-sm">thin to 1-px lines</text>
+
+    <rect x="470" y="26" width="120" height="58" rx="9" fill="#fff" stroke="#b3bcc6"/>
+    <text x="530" y="46" text-anchor="middle" class="s-lbl">Bridge</text>
+    <text x="530" y="64" text-anchor="middle" class="s-sm">rejoin broken ends</text>
+
+    <rect x="622" y="26" width="120" height="58" rx="9" fill="#fff" stroke="#b3bcc6"/>
+    <text x="682" y="46" text-anchor="middle" class="s-lbl">Trace</text>
+    <text x="682" y="64" text-anchor="middle" class="s-sm">make polylines</text>
+
+    <path d="M134,55 H166" stroke="#9aa6b2" marker-end="url(#ar)"/>
+    <path d="M286,55 H318" stroke="#9aa6b2" marker-end="url(#ar)"/>
+    <path d="M438,55 H470" stroke="#9aa6b2" marker-end="url(#ar)"/>
+    <path d="M590,55 H622" stroke="#9aa6b2" marker-end="url(#ar)"/>
+  </g>
+  <!-- down -->
+  <path d="M742,84 C 800,110 800,120 760,150" fill="none" stroke="#9aa6b2" marker-end="url(#ar)"/>
+  <!-- row 2 (right to left) -->
+  <g>
+    <rect x="622" y="150" width="120" height="58" rx="9" fill="#fff" stroke="#b3bcc6"/>
+    <text x="682" y="174" text-anchor="middle" class="s-lbl">Merge</text>
+    <text x="682" y="190" text-anchor="middle" class="s-sm">join into long lines</text>
+
+    <rect x="470" y="150" width="120" height="58" rx="9" fill="#eaf6ee" stroke="#bfe2cd"/>
+    <text x="530" y="170" text-anchor="middle" class="s-lbl">Filter</text>
+    <text x="530" y="186" text-anchor="middle" class="s-sm">drop junk by size</text>
+    <text x="530" y="200" text-anchor="middle" class="s-sm">→ <tspan font-style="italic">_lines.shp</tspan></text>
+
+    <rect x="318" y="150" width="120" height="58" rx="9" fill="#fff" stroke="#b3bcc6" stroke-dasharray="4 3"/>
+    <text x="378" y="172" text-anchor="middle" class="s-lbl">De-hair*</text>
+    <text x="378" y="190" text-anchor="middle" class="s-sm">trim leftover barbs</text>
+
+    <rect x="166" y="150" width="120" height="58" rx="9" fill="#fff" stroke="#b3bcc6" stroke-dasharray="4 3"/>
+    <text x="226" y="172" text-anchor="middle" class="s-lbl">Snap*</text>
+    <text x="226" y="190" text-anchor="middle" class="s-sm">align to cadastre</text>
+
+    <rect x="14" y="150" width="120" height="58" rx="9" fill="#eef4ff" stroke="#cfe0ff"/>
+    <text x="74" y="172" text-anchor="middle" class="s-lbl">Overlay</text>
+    <text x="74" y="190" text-anchor="middle" class="s-sm">QA picture</text>
+
+    <path d="M622,179 H590" stroke="#9aa6b2" marker-end="url(#ar)"/>
+    <path d="M470,179 H438" stroke="#9aa6b2" marker-end="url(#ar)"/>
+    <path d="M318,179 H286" stroke="#9aa6b2" marker-end="url(#ar)"/>
+    <path d="M166,179 H134" stroke="#9aa6b2" marker-end="url(#ar)"/>
+  </g>
+  <text x="14" y="224" class="s-sm">* De-hair and Snap are optional — off by default.</text>
+</svg>
+<figcaption>The stages, in order. Each box is a checkbox in the GUI's "Stages to run" row.</figcaption>
+</figure>
+
+<p><b>Two map types, one engine.</b> The only stage that differs between projects is <b>Extract</b>: <span class="badge b-5">red-ink</span> is dark-RED ink over a yellow wash (uses a smart local threshold, no knobs in the GUI), and <span class="badge b-9a">black-ink</span> is BLACK ink (uses the Detection knobs below). Everything after Extract is identical for both.</p>
+
+<h2 id="dials">The two dials: recall &amp; precision</h2>
+<p>Almost every parameter slides you along a trade-off between catching everything and staying clean. Keep this picture in mind whenever you tune.</p>
+<figure>
+<svg viewBox="0 0 760 150" role="img" aria-label="Recall vs precision trade-off">
+  <text x="20" y="28" class="s-lbl" fill="#1e8449">RECALL — did we catch all the real borders?</text>
+  <text x="20" y="46" class="s-sm">low recall = missing real lines (gaps, dropped segments)</text>
+  <text x="420" y="28" class="s-lbl" fill="#e74c3c">PRECISION — is what we drew actually a border?</text>
+  <text x="420" y="46" class="s-sm">low precision = junk / artifacts (text, symbols, fold)</text>
+
+  <line x1="20" y1="92" x2="740" y2="92" stroke="#cdd5de" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="380" cy="92" r="11" fill="#2563c9"/>
+  <text x="20"  y="120" class="s-sm">looser settings →<tspan x="20" dy="15">catch more, but more junk</tspan></text>
+  <text x="740" y="120" text-anchor="end" class="s-sm">stricter settings →<tspan x="740" dy="15">cleaner, but you lose faint real lines</tspan></text>
+  <text x="380" y="132" text-anchor="middle" class="s-mut">the defaults aim for here</text>
+</svg>
+<figcaption>The goal is the best balance (F1), not 100% of either. The right setting depends on whether you'd rather fix gaps or delete junk afterwards.</figcaption>
+</figure>
+
+<!-- =================== DETECTION =================== -->
+<h2 id="detection">Detection group <span class="badge b-9a" style="font-size:13px">black-ink only</span></h2>
+<p>These turn the colour photo into a clean black-and-white mask of just the ink. <b>For red-ink these three fields are blank and ignored</b> — it uses an automatic local threshold instead.</p>
+
+<div class="card">
+<h3>cap <span class="badge b-9a">black-ink</span><span class="def">default <b>145</b> · range ~110–170</span></h3>
+<p>The brightness ceiling for "this pixel is ink". A pixel counts as ink if its <i>brightest</i> colour channel is below <code>cap</code>. Black ink is dark in every channel, so this catches it and ignores coloured stuff (red numbers, purple admin lines).</p>
+<figure>
+<svg viewBox="0 0 720 130" role="img" aria-label="cap brightness threshold">
+  <defs><linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#111"/><stop offset="1" stop-color="#fff"/></linearGradient></defs>
+  <text x="20" y="22" class="s-sm">dark (ink)</text>
+  <text x="700" y="22" text-anchor="end" class="s-sm">bright (paper / wash)</text>
+  <rect x="20" y="30" width="680" height="34" fill="url(#g1)" stroke="#cdd5de"/>
+  <line x1="360" y1="22" x2="360" y2="74" stroke="#2563c9" stroke-width="3"/>
+  <text x="360" y="90" text-anchor="middle" class="s-lbl" fill="#2563c9">cap = 145</text>
+  <path d="M20,72 H360" stroke="#1e8449" stroke-width="5"/>
+  <text x="170" y="110" text-anchor="middle" class="s-sm" fill="#1e8449">kept as ink ✓</text>
+  <path d="M360,72 H700" stroke="#e74c3c" stroke-width="5"/>
+  <text x="530" y="110" text-anchor="middle" class="s-sm" fill="#e74c3c">ignored</text>
+</svg>
+</figure>
+<table><tr><th>Symptom</th><th>Do</th></tr>
+<tr><td>Faint / grey strokes are being missed (low recall)</td><td class="tu">raise cap</td></tr>
+<tr><td>The coloured wash or paper texture is bleeding in as fake ink (low precision)</td><td class="td">lower cap</td></tr></table>
+</div>
+
+<div class="card">
+<h3>min_px <span class="badge b-9a">black-ink</span><span class="def">default <b>30</b> px</span></h3>
+<p>The smallest blob of ink (in pixels) the Extract stage keeps. Tiny specks — dust, ink splatter, fragments of printed digits — are smaller than this and get dropped before anything else runs.</p>
+<figure>
+<svg viewBox="0 0 720 120" role="img" aria-label="min_px small blob removal">
+  <text x="20" y="22" class="s-sm">before — speckle everywhere</text>
+  <g fill="#c0392b">
+    <rect x="40" y="40" width="60" height="6" rx="3"/><rect x="44" y="60" width="50" height="6" rx="3"/>
+    <circle cx="130" cy="50" r="2.5"/><circle cx="150" cy="70" r="2"/><circle cx="115" cy="78" r="2"/>
+    <circle cx="165" cy="44" r="2.5"/><circle cx="95" cy="90" r="2"/>
+  </g>
+  <line x1="300" y1="20" x2="300" y2="100" stroke="#e2e6ec"/>
+  <text x="380" y="22" class="s-sm">after — specks below min_px gone</text>
+  <g fill="#c0392b">
+    <rect x="400" y="40" width="60" height="6" rx="3"/><rect x="404" y="60" width="50" height="6" rx="3"/>
+  </g>
+  <text x="560" y="64" class="s-sm" fill="#1e8449">✓ real strokes kept</text>
+</svg>
+</figure>
+<table><tr><th>Symptom</th><th>Do</th></tr>
+<tr><td>Lots of dotty speckle survives into the lines</td><td class="td">raise min_px</td></tr>
+<tr><td>Short but real border bits are vanishing</td><td class="tu">lower min_px</td></tr></table>
+</div>
+
+<div class="card">
+<h3>buf <span class="badge b-9a">black-ink</span><span class="def">default <b>35</b> m</span></h3>
+<p>How far (in metres) to grow the target corridor — the <code>Motzag</code> polygons — before clipping. A border often sits right on the polygon's edge or just outside it; the buffer makes sure it isn't cut off. Bigger buffer = catch more edge borders, but also more surrounding clutter.</p>
+<figure>
+<svg viewBox="0 0 720 150" role="img" aria-label="corridor buffer">
+  <rect x="120" y="30" width="260" height="90" rx="6" fill="#eef4ff" stroke="#9bb8ee" stroke-dasharray="5 4"/>
+  <text x="250" y="20" text-anchor="middle" class="s-sm" fill="#2563c9">buffer (buf metres)</text>
+  <rect x="150" y="48" width="200" height="54" rx="4" fill="#dbe7fb" stroke="#2563c9"/>
+  <text x="250" y="79" text-anchor="middle" class="s-lbl" fill="#274d8f">Motzag polygon</text>
+  <path d="M150,75 H100" stroke="#c0392b" stroke-width="3"/>
+  <text x="92" y="71" text-anchor="end" class="s-sm" fill="#c0392b">border just<tspan x="92" dy="14">outside — caught</tspan></text>
+  <path d="M350,55 H420" stroke="#c0392b" stroke-width="3"/>
+  <text x="430" y="59" class="s-sm" fill="#c0392b">caught because<tspan x="430" dy="14">inside the buffer</tspan></text>
+</svg>
+</figure>
+<table><tr><th>Symptom</th><th>Do</th></tr>
+<tr><td>Borders along the corridor edge are clipped off</td><td class="tu">raise buf</td></tr>
+<tr><td>Too much junk from outside the area of interest</td><td class="td">lower buf</td></tr></table>
+</div>
+
+<!-- =================== SKELETON =================== -->
+<h2 id="skeleton">Skeleton group <span class="badge b-both" style="font-size:13px">both</span></h2>
+<p>Skeletonize thins fat ink strokes down to clean 1-pixel-wide centrelines.</p>
+
+<div class="card">
+<h3>close_r <span class="badge b-both">both</span><span class="def">black-ink: <b>1</b> · red-ink: <b>3</b> · 0 = off</span></h3>
+<p>Before thinning, "close" gaps up to this radius (pixels) so a line broken by a tiny ink fade isn't split into two. Small value = only hairline gaps; too big = fuses neighbouring lines together.</p>
+<figure>
+<svg viewBox="0 0 720 100" role="img" aria-label="gap close">
+  <text x="20" y="22" class="s-sm">before</text>
+  <line x1="40" y1="55" x2="150" y2="55" stroke="#c0392b" stroke-width="5"/>
+  <line x1="166" y1="55" x2="300" y2="55" stroke="#c0392b" stroke-width="5"/>
+  <text x="158" y="42" text-anchor="middle" class="s-sm" fill="#e74c3c">tiny gap</text>
+  <text x="400" y="22" class="s-sm">after close_r</text>
+  <line x1="420" y1="55" x2="690" y2="55" stroke="#1e8449" stroke-width="5"/>
+</svg>
+</figure>
+<table><tr><th>Symptom</th><th>Do</th></tr>
+<tr><td>Single borders keep splitting at faded spots</td><td class="tu">raise close_r (try +1)</td></tr>
+<tr><td>Parallel lines are merging into one blob</td><td class="td">lower close_r</td></tr></table>
+</div>
+
+<div class="card">
+<h3>prune <span class="badge b-both">both</span><span class="def">black-ink: <b>15</b> · red-ink: <b>40</b> px</span></h3>
+<p>Thinning a thick or rough stroke leaves little "whiskers" hanging off the centreline. <code>prune</code> removes whisker branches shorter than this length (pixels). See the de-hair picture lower down — it's the same idea, here in pixels on the skeleton.</p>
+<table><tr><th>Symptom</th><th>Do</th></tr>
+<tr><td>Fuzzy whiskers all along the lines</td><td class="tu">raise prune</td></tr>
+<tr><td>Short real stubs (real corners/spurs) disappearing</td><td class="td">lower prune</td></tr></table>
+</div>
+
+<!-- =================== BRIDGE =================== -->
+<h2 id="bridge">Bridge group <span class="badge b-both" style="font-size:13px">both</span></h2>
+<p>Bridge reconnects a border that broke into pieces — but <i>only</i> when the two loose ends clearly belong together, so it doesn't accidentally weld neighbouring lines.</p>
+
+<div class="card">
+<h3>gap <span class="badge b-both">both</span><span class="def">default <b>25</b> px (max_gap)</span></h3>
+<h3 style="margin-top:4px">cos <span class="badge b-both">both</span><span class="def">default <b>0.80</b> (≈ within 37°)</span></h3>
+<p>Two rules must <b>both</b> pass before a gap is bridged: the ends must be closer than <code>gap</code> pixels, <b>and</b> they must point at each other within the angle set by <code>cos</code> (0.80 ≈ 37°; higher = must be more perfectly in line). This is what lets it rejoin a dashed border without zipping two parallel roads together.</p>
+<figure>
+<svg viewBox="0 0 720 160" role="img" aria-label="directional bridge">
+  <text x="20" y="22" class="s-sm" fill="#1e8449">aligned + close → bridged ✓</text>
+  <line x1="40" y1="45" x2="150" y2="45" stroke="#c0392b" stroke-width="5"/>
+  <line x1="185" y1="45" x2="300" y2="45" stroke="#c0392b" stroke-width="5"/>
+  <line x1="150" y1="45" x2="185" y2="45" stroke="#1e8449" stroke-width="3" stroke-dasharray="4 3"/>
+
+  <text x="400" y="22" class="s-sm" fill="#e74c3c">not aligned → left alone ✗</text>
+  <line x1="420" y1="38" x2="520" y2="38" stroke="#c0392b" stroke-width="5"/>
+  <line x1="560" y1="95" x2="660" y2="95" stroke="#c0392b" stroke-width="5"/>
+  <path d="M520,38 L560,95" stroke="#e74c3c" stroke-width="2" stroke-dasharray="3 3"/>
+  <text x="540" y="74" class="s-sm" fill="#e74c3c">too sharp an angle</text>
+
+  <text x="20" y="120" class="s-sm">Think: <tspan font-weight="700">gap</tspan> = how far it will reach; <tspan font-weight="700">cos</tspan> = how fussy it is about straightness.</text>
+  <text x="20" y="142" class="s-sm">Bigger gap + lower cos = joins more (incl. dashed lines) but risks wrong joins.</text>
+</svg>
+</figure>
+<table><tr><th>Symptom</th><th>Do</th></tr>
+<tr><td>Borders stay broken across visible gaps / dashes</td><td class="tu">raise gap, or lower cos toward 0.7</td></tr>
+<tr><td>Lines are joining where they shouldn't (across corners, parallels)</td><td class="td">lower gap, or raise cos toward 0.9</td></tr></table>
+</div>
+
+<!-- =================== TRACE =================== -->
+<h2 id="trace">Trace group <span class="badge b-both" style="font-size:13px">both</span></h2>
+<p>Trace converts the skeleton into actual polylines and does a first cleanup pass.</p>
+
+<div class="card">
+<h3>spur <span class="badge b-both">both</span><span class="def">black-ink: <b>4</b> · red-ink: <b>12</b> px</span></h3>
+<p>Same idea as <code>prune</code>, but during tracing: drop a short dead-end branch (one free end, the other meeting a junction) shorter than this. Removes leftover hairs the skeleton stage missed.</p>
+</div>
+
+<div class="card">
+<h3>loop <span class="badge b-both">both</span><span class="def">black-ink: <b>6</b> · red-ink: <b>30</b> px</span></h3>
+<p>When two ink lines run side by side, thinning can leave a thin closed "bubble". <code>loop</code> removes closed loops smaller than this. <b>Careful:</b> a genuinely tiny parcel is also a small loop — too high a value can erase real small parcels.</p>
+<figure>
+<svg viewBox="0 0 720 110" role="img" aria-label="loop removal">
+  <text x="20" y="22" class="s-sm">before</text>
+  <path d="M40,60 H120 a18,14 0 0 1 0,0 C150,40 150,80 120,60 M120,60 H300" fill="none" stroke="#c0392b" stroke-width="4"/>
+  <ellipse cx="135" cy="60" rx="20" ry="13" fill="none" stroke="#e74c3c" stroke-width="4"/>
+  <text x="135" y="96" text-anchor="middle" class="s-sm" fill="#e74c3c">bubble loop</text>
+  <text x="400" y="22" class="s-sm">after</text>
+  <line x1="420" y1="60" x2="690" y2="60" stroke="#1e8449" stroke-width="4"/>
+</svg>
+</figure>
+<table><tr><th>Symptom</th><th>Do</th></tr>
+<tr><td>Lots of little bubbles where doubled lines run</td><td class="tu">raise loop</td></tr>
+<tr><td>Small real parcels are being erased</td><td class="td">lower loop</td></tr></table>
+</div>
+
+<div class="card">
+<h3>simp_px <span class="badge b-both">both</span><span class="def">black-ink: <b>1.0</b> · red-ink: <b>1.5</b> px</span></h3>
+<p>A pixel trace looks like a staircase. This straightens it during tracing, in pixels. There is a sister knob in metres at the very end (<code>simp_m</code>, default 0.5). Higher = smoother but can round off real corners.</p>
+<figure>
+<svg viewBox="0 0 720 100" role="img" aria-label="simplify staircase">
+  <text x="20" y="22" class="s-sm">staircase (raw)</text>
+  <path d="M40,75 H70 V60 H110 V45 H150 V35 H210" fill="none" stroke="#c0392b" stroke-width="3"/>
+  <text x="400" y="22" class="s-sm">simplified</text>
+  <path d="M420,75 L690,35" fill="none" stroke="#1e8449" stroke-width="3"/>
+</svg>
+</figure>
+</div>
+
+<!-- =================== FILTER =================== -->
+<h2 id="filter">Filter group <span class="badge b-both" style="font-size:13px">both</span> — the main junk remover</h2>
+
+<div class="card">
+<h3>min_comp <span class="badge b-both">both</span><span class="def">black-ink: <b>40</b> · red-ink: <b>20</b> m</span></h3>
+<p><b>The single most important knob for artifacts.</b> Real borders connect up into big networks; map junk — the legend, the number/area table, scattered symbols, place-name text — sits in small, <i>isolated</i> clusters. This keeps a line only if everything connected to it adds up to at least <code>min_comp</code> metres. It removes most junk automatically.</p>
+<figure>
+<svg viewBox="0 0 720 150" role="img" aria-label="component size filter">
+  <text x="20" y="20" class="s-sm">before filter</text>
+  <!-- big network -->
+  <g stroke="#c0392b" stroke-width="3" fill="none">
+    <path d="M40,55 H150 M95,40 V120 M40,120 H150 M150,55 H210 V120 H150"/>
+  </g>
+  <text x="120" y="138" text-anchor="middle" class="s-sm" fill="#1e8449">big connected network = real ✓</text>
+  <!-- small isolated -->
+  <g stroke="#e74c3c" stroke-width="3" fill="none">
+    <path d="M300,50 h22 m-11,-6 v22"/><path d="M340,70 h20"/><path d="M300,100 l16,12"/><path d="M345,110 h18"/>
+  </g>
+  <text x="330" y="138" text-anchor="middle" class="s-sm" fill="#e74c3c">small isolated bits = junk</text>
+
+  <line x1="430" y1="20" x2="430" y2="135" stroke="#e2e6ec"/>
+  <text x="470" y="20" class="s-sm">after filter</text>
+  <g stroke="#1e8449" stroke-width="3" fill="none">
+    <path d="M490,55 H600 M545,40 V120 M490,120 H600 M600,55 H660 V120 H600"/>
+  </g>
+</svg>
+</figure>
+<table><tr><th>Symptom</th><th>Do</th></tr>
+<tr><td>Legend / text / symbols survive as stray lines</td><td class="tu">raise min_comp</td></tr>
+<tr><td>Short, isolated <i>real</i> borders are being deleted</td><td class="td">lower min_comp</td></tr></table>
+<p class="s-mut" style="font-size:13px">Note: making the corridor tighter does <i>not</i> help here — it cuts real borders that sit on the corridor edge faster than it cuts junk. Size-by-connectivity is the reliable lever.</p>
+</div>
+
+<div class="card">
+<h3>simp_m <span class="badge b-both">both</span><span class="def">default <b>0.5</b> m</span></h3>
+<p>The final straightening, in metres (the metric twin of <code>simp_px</code>). 0.5 m removes the leftover staircase without visibly moving the lines. Raise only if outputs still look jagged; lower toward 0 if corners feel rounded off.</p>
+</div>
+
+<!-- =================== DEHAIR =================== -->
+<h2 id="dehair">De-hair group <span class="badge b-both" style="font-size:13px">both · optional, off by default</span></h2>
+
+<div class="card">
+<h3>hair <span class="badge b-both">both</span><span class="def">default <b>4</b> m (max_hair)</span></h3>
+<h3 style="margin-top:4px">passes <span class="badge b-both">both</span><span class="def">default <b>3</b></span></h3>
+<p>An optional final polish: snip off short "barbs" — a stub with one free end and one end on a junction — up to <code>hair</code> metres long. Removing one barb can expose another, so it runs <code>passes</code> times. Real borders and long dangles are kept.</p>
+<figure>
+<svg viewBox="0 0 720 110" role="img" aria-label="de-hair barbs">
+  <text x="20" y="22" class="s-sm">before</text>
+  <line x1="40" y1="60" x2="300" y2="60" stroke="#c0392b" stroke-width="4"/>
+  <line x1="110" y1="60" x2="125" y2="42" stroke="#e74c3c" stroke-width="3"/>
+  <line x1="180" y1="60" x2="170" y2="80" stroke="#e74c3c" stroke-width="3"/>
+  <line x1="240" y1="60" x2="258" y2="46" stroke="#e74c3c" stroke-width="3"/>
+  <text x="400" y="22" class="s-sm">after</text>
+  <line x1="420" y1="60" x2="690" y2="60" stroke="#1e8449" stroke-width="4"/>
+</svg>
+</figure>
+<p class="s-mut" style="font-size:13px">Turn this on (tick the <code>dehair</code> stage) if the result is clean but slightly fuzzy at junctions. Raise <code>hair</code> for longer barbs — but too high starts eating short real spurs.</p>
+</div>
+
+<!-- =================== SNAP =================== -->
+<h2 id="snap">Snap group <span class="badge b-both" style="font-size:13px">both · optional, off by default</span></h2>
+
+<div class="card">
+<h3>snap_tol <span class="badge b-both">both</span><span class="def">red ink: <b>3</b> · black-ink: <b>8</b> m (tol)</span></h3>
+<h3 style="margin-top:4px">snap_frac <span class="badge b-both">both</span><span class="def">default <b>0.6</b> (match_frac — short lines only)</span></h3>
+<h3 style="margin-top:4px">snap_run <span class="badge b-both">both</span><span class="def">default <b>10</b> m (min_run)</span></h3>
+<p>Optional. All the reference layers (<b>Snap layers</b> from the corridor GDB + <b>Parcels lyr</b> from the parcels GDB) are pooled into <b>one boundary network</b>. Every stretch of a detected line that follows that network within <code>snap_tol</code> metres — for at least <code>snap_run</code> metres — is moved exactly onto it; the rest of the line keeps the drawn ink. A line can therefore be <b>split</b>: half snapped, half historical. Reference boundaries crossing the line at a steep angle are ignored (no zig-zag "teeth"). Lines shorter than <code>snap_run</code> are snapped whole only if at least <code>snap_frac</code> of their length is on the network.</p>
+<figure>
+<svg viewBox="0 0 720 150" role="img" aria-label="snap to reference">
+  <text x="20" y="20" class="s-sm">grey = reference network · red = detected · green = result</text>
+  <!-- case follows then diverges: split -->
+  <path d="M40,55 H260" stroke="#9aa6b2" stroke-width="6"/>
+  <path d="M45,61 H170 C 210,61 220,95 258,95" stroke="#c0392b" stroke-width="3" stroke-dasharray="6 4"/>
+  <path d="M40,120 H170" stroke="#1e8449" stroke-width="4"/>
+  <path d="M170,120 C 210,120 215,140 250,140" stroke="#c0392b" stroke-width="3"/>
+  <text x="150" y="42" text-anchor="middle" class="s-sm" fill="#1e8449">follows ≥ min_run → that stretch snaps; the rest stays ink (split) ✓</text>
+  <line x1="330" y1="30" x2="330" y2="130" stroke="#e2e6ec"/>
+  <!-- case diverges -->
+  <path d="M380,55 H600" stroke="#9aa6b2" stroke-width="6"/>
+  <path d="M380,60 C 470,60 480,110 600,110" stroke="#c0392b" stroke-width="3"/>
+  <text x="490" y="135" text-anchor="middle" class="s-sm" fill="#c0392b">diverges → kept as the ink ✓</text>
+</svg>
+</figure>
+<table><tr><th>Symptom</th><th>Do</th></tr>
+<tr><td>Lines that clearly match the reference aren't being cleaned up</td><td class="tu">raise snap_tol, or lower snap_run</td></tr>
+<tr><td>It's "correcting" lines onto the reference that shouldn't move</td><td class="td">lower snap_tol, or raise snap_run</td></tr></table>
+<p class="s-mut" style="font-size:13px">The output <code>_lines_snapped.shp</code> gets a <code>snapped</code> field: 0 = kept as ink, 1 = on a reference boundary. The preview PNG colors them red / green. Filter on the field in Pro to review what changed.</p>
+</div>
+
+<!-- =================== IO =================== -->
+<h2 id="io">Inputs &amp; corridor</h2>
+<div class="card">
+<h3>Mode</h3>
+<p>Picks the project preset: <span class="badge b-9a">black-ink</span> (black ink) or <span class="badge b-5">red-ink</span> (red ink over a yellow wash). All projects use the same engine — the target area is always the GDB polygons whose <code>Motzag</code> equals the sheet number — the modes differ only by ink method and default folders/GDBs. Switching mode reloads that preset's defaults.</p>
+</div>
+<div class="card">
+<h3>Sheets</h3>
+<p>What to process. Accepts a single name (<code>M8_9076</code>), a comma/space list, a wildcard (<code>M2_*</code>), a folder path (every sheet in it), or <code>all</code>. <b>Scan</b> fills this with every sheet in the Input folder; <b>Pick files…</b> lets you tick them.</p>
+</div>
+<div class="card">
+<h3>Corridor GDB &amp; GDB layers <span class="badge b-9a">black-ink</span></h3>
+<p>The geodatabase holding the target polygons, and which layers inside it to use. The pipeline reads only the polygons whose <code>Motzag</code> attribute equals the sheet number (so <code>M8_9076</code> → <code>Motzag = 8</code>), buffers them (<code>buf</code>), and only looks for ink there. Use <b>Choose…</b> to tick the layers. If a sheet has no matching polygons it is skipped (not an error).</p>
+</div>
+<div class="card">
+<h3>Snap layers</h3>
+<p>Which layer(s) <b>in the corridor GDB</b> to snap onto — the block/Gush polygons (e.g. <code>Poly_ID, Poly_Map, Poly_map2</code>). Use <b>Choose…</b>. Only matters if you run Snap.</p>
+</div>
+<div class="card">
+<h3>Parcels GDB &amp; Parcels lyr</h3>
+<p>A separate GDB holding the clean cadastral parcels (e.g. <code>Cad-GOV\Layers.gdb</code> → <code>PARCEL_ALL</code>). Pooled with the Snap layers into one reference network. Reprojected automatically. Only matters if you run Snap.</p>
+</div>
+
+<!-- =================== STAGES =================== -->
+<h2 id="stages">Stages &amp; buttons</h2>
+<table>
+<tr><th>Control</th><th>What it does</th></tr>
+<tr><td><b>Stage checkboxes</b></td><td>Pick which steps run. The whole chain is on by default except <code>dehair</code> and <code>snap</code>. You can re-run just one stage (e.g. re-do Filter with a new <code>min_comp</code>) if the earlier outputs already exist — tick <b>keep intermediates</b> so they're available.</td></tr>
+<tr><td><b>keep intermediates</b></td><td>Off (default): the in-between rasters go to a temp folder and the work folder stays clean (just the <code>.shp</code>, <code>_preview.png</code>, <code>.log</code>). On: keep them in the work folder — handy when tuning one stage at a time.</td></tr>
+<tr><td><b>▶ Run / ■ Stop</b></td><td>Start the ticked stages for all listed sheets; Stop ends the current one.</td></tr>
+<tr><td><b>Open output folder</b></td><td>Opens the sheet's working folder where outputs land.</td></tr>
+<tr><td><b>View overlay</b></td><td>Opens <code>&lt;stem&gt;_preview.png</code> — your detected lines drawn in red over the faded scan. <b>Your main visual check.</b></td></tr>
+<tr><td><b>Metrics…</b></td><td>Scores the result against a hand-corrected reference shapefile you pick: prints recall / precision / F1. Needs a reference (next section).</td></tr>
+</table>
+
+<!-- =================== CHEAT SHEET =================== -->
+<h2 id="cheat">Cheat sheet — "I see X, change Y"</h2>
+<table>
+<tr><th>What you see in the overlay</th><th>Most likely knob</th></tr>
+<tr><td>Faint borders missing entirely</td><td><b>cap</b> ↑ (9A) · <b>min_comp</b> ↓</td></tr>
+<tr><td>Borders broken into pieces / dashed gaps not closed</td><td><b>gap</b> ↑, <b>cos</b> ↓ · <b>close_r</b> ↑</td></tr>
+<tr><td>Place-name text, legend, number table showing as lines</td><td><b>min_comp</b> ↑</td></tr>
+<tr><td>Speckle / dots</td><td><b>min_px</b> ↑ (9A)</td></tr>
+<tr><td>Whiskers / fuzzy junctions</td><td><b>prune</b> ↑ · turn on <b>dehair</b></td></tr>
+<tr><td>Little bubbles along doubled lines</td><td><b>loop</b> ↑</td></tr>
+<tr><td>Coloured wash bleeding in as ink (9A)</td><td><b>cap</b> ↓</td></tr>
+<tr><td>Neighbouring parallel lines merged together</td><td><b>close_r</b> ↓ · <b>gap</b> ↓, <b>cos</b> ↑</td></tr>
+<tr><td>Small real parcels erased</td><td><b>loop</b> ↓ · <b>min_comp</b> ↓</td></tr>
+<tr><td>Lines look jagged / staircased</td><td><b>simp_m</b> ↑ (a little)</td></tr>
+</table>
+<p class="s-mut" style="font-size:13.5px">Rule of thumb: artifacts (text, symbols, fold, hatching) are almost always a <b>min_comp</b> / connectivity problem first. Try that before anything else.</p>
+
+<hr>
+
+<!-- =================== LABELING =================== -->
+<h2 id="label">Labeling data to make results better &amp; fight artifacts</h2>
+<p>Tuning by eye plateaus. To push further you give the pipeline a little hand-made "truth" to learn from and measure against. Three tiers, easiest first.</p>
+
+<h3>Tier 1 — a reference "truth" layer (do this first; it powers Metrics)</h3>
+<p>This turns guessing into measuring.</p>
+<ul>
+<li><b>Copy</b> the auto-result <code>&lt;stem&gt;_lines.shp</code> into a new editable feature class <code>&lt;stem&gt;_ref</code> — you correct a near-complete trace, you don't draw from scratch.</li>
+<li>Don't do a whole sheet. Pick <b>2–4 small windows</b> (a few hundred metres each): a clean rural block, a built-up/town block, a text-heavy patch, an area over the wash/fold. In each: delete false lines, draw the missing borders snapped to the ink at full zoom, fix wandering traces.</li>
+<li>Save in <b>EPSG 6991</b> (same as the result — Metrics does not reproject).</li>
+<li><b>Before scoring, clip the result to the same windows</b> (Pairwise Clip, available on Basic) — otherwise precision looks falsely bad from all the lines outside the labeled area.</li>
+</ul>
+<p><b>Unlocks:</b> the <b>Metrics…</b> button. Low recall = missing real lines (loosen). Low precision = artifacts (the thing to drive down). Now every knob change gets a number.</p>
+
+<h3>Tier 2 — labeled artifact boxes (the artifact-fighting engine)</h3>
+<p>A polygon layer <code>artifacts_&lt;stem&gt;</code>: draw a box around each recurring artifact and tag it with a <code>kind</code> attribute. 5–10 boxes per kind is plenty.</p>
+<table>
+<tr><th>kind</th><th>what it is</th><th>the signal that separates it from a real border</th></tr>
+<tr><td><code>text</code></td><td>place names / parcel numbers</td><td>short, very wiggly strokes packed into a small box</td></tr>
+<tr><td><code>building_block</code></td><td>town hatching</td><td>many short right-angle segments at a regular spacing</td></tr>
+<tr><td><code>double_line</code></td><td>road/river drawn as a pair</td><td>two near-parallel lines a fixed distance apart</td></tr>
+<tr><td><code>fold</code></td><td>scan crease</td><td>one very long, very straight line crossing the sheet</td></tr>
+<tr><td><code>symbol</code> / <code>grid</code></td><td>legend, north arrow, graticule</td><td>fixed place / regular geometry</td></tr>
+</table>
+<p><b>Unlocks:</b> for each kind I can measure how much a candidate filter removes of <i>that</i> artifact versus how much real border it costs, then design and wire in a targeted filter. Sending me the boxes (or even just a screenshot or two) is exactly what lets me give you "this is the bucket, here's the filter".</p>
+
+<h3>Tier 3 — keep/drop tags per line (a learned filter; optional, highest ceiling)</h3>
+<p>Tag a few hundred traced components on one sheet with <code>keep = 1/0</code>. That's a training set for a small classifier (length, straightness, number of junctions, ink darkness, distance to the nearest modern parcel edge…) that decides "real border or not" — generalizing all the hand-set thresholds into one learned rule. Runs on the Basic license, no Spatial Analyst. If you want this, I'll add two small scripts to export the features and train/apply the model.</p>
+<p class="s-mut" style="font-size:13px">(Tier 4, only if the classical approach stalls: rasterize the Tier-1 reference into a border mask, cut into tiles, train a U-Net. Heaviest path — revisit only if 1–3 aren't enough.)</p>
+
+<div class="rule" style="background:#eaf6ee;border-color:#bfe2cd;border-left-color:#1e8449">
+<b>Recommended next step:</b> build a Tier-1 reference on <b>M8</b> (2–3 windows), run <b>Metrics</b> for a baseline, then send me one or two screenshots of the artifacts you keep seeing. I'll bucket each and wire a targeted filter into the Filter stage.
+</div>
+
+<p class="s-mut" style="font-size:12.5px;margin-top:40px">LineDetector · parameter reference for pipeline_gui.py · keep this file alongside the scripts.</p>
+
+</body>
+</html>
