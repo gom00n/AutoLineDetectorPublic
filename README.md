@@ -1,5 +1,10 @@
 # LineDetector
 
+> **Public showcase of a tool I built and run in production at work.** The working
+> repository is private — it holds the development history, the client's scans and
+> the project geodatabases. This version carries the code and documentation only,
+> which is why it lands as a single commit.
+
 Extract parcel-border **lines** from scanned historical cadastral map sheets (raster) and
 vectorize them to georeferenced polylines, on an ArcGIS Pro **Basic** license (no Spatial
 Analyst). Built for Israeli cadastral projects (Israel TM Grid / Gush-Parcel), but the
