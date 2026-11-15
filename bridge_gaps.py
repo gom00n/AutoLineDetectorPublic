@@ -10,8 +10,9 @@ not merged. Two passes:
   2. endpoint  -> line     : extend a stub that stops just short of a crossing border
                              (T-junction), casting a short ray along the stub's direction.
 
-Then re-skeletonize (drawn bridges may be 1px-thick already, but junctions need cleanup)
-and re-prune spurs. Output is a Byte 0/1 skeleton, same grid as input.
+The connectors are drawn 1-px and the skeleton is NOT re-skeletonized (skimage.skeletonize is
+not idempotent on an already-thin skeleton); only spurs are re-pruned. Output is a Byte 0/1
+skeleton, same grid as input.
 
 Run (between skeletonize.py and trace_lines.py):
   python bridge_gaps.py in_skel.tif out_skel.tif [max_gap=25] [cos=0.80] [ray=0|1]
@@ -28,6 +29,7 @@ from skeletonize import prune_spurs  # reuse the same de-hairing
 gdal.UseExceptions()
 OPTS = ["COMPRESS=LZW", "PREDICTOR=2", "TILED=YES", "BIGTIFF=IF_SAFER"]
 _8 = np.ones((3, 3), np.uint8)
+NB8 = ((-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1))
 
 
 def endpoints(sk):
@@ -36,16 +38,50 @@ def endpoints(sk):
     return np.argwhere(sk & (nbr == 2))
 
 
+def walk_back(sk, ep, n):
+    """Up to n pixels of the endpoint's OWN stroke, walked from the endpoint inwards along the
+    skeleton and stopping at the first junction. The endpoint itself is not included."""
+    H, W = sk.shape
+    prev, cur = None, (int(ep[0]), int(ep[1]))
+    seen, path = {cur}, []
+    for _ in range(n):
+        r, c = cur
+        nxt = [(r + dr, c + dc) for dr, dc in NB8
+               if 0 <= r + dr < H and 0 <= c + dc < W and sk[r + dr, c + dc]
+               and (r + dr, c + dc) not in seen]
+        if len(nxt) > 1 and prev is not None:
+            # a staircase corner offers the same next pixel twice (orthogonal + diagonal);
+            # drop the candidates that merely neighbour the pixel we came from
+            far = [q for q in nxt if max(abs(q[0] - prev[0]), abs(q[1] - prev[1])) > 1]
+            nxt = far or nxt
+        if len(nxt) == 2:
+            # exactly two, a 4-neighbour and the diagonal right beside it: one direction, not
+            # a fork (three candidates in a row is a T-junction and must stop the walk)
+            orth = [q for q in nxt if q[0] == r or q[1] == c]
+            if len(orth) == 1 and all(abs(q[0] - orth[0][0]) + abs(q[1] - orth[0][1]) <= 1 for q in nxt):
+                nxt = orth
+        if len(nxt) != 1:                     # dead end, or a real junction: stop here
+            break
+        prev, cur = cur, nxt[0]
+        seen.add(cur); path.append(cur)
+    return path
+
+
 def outward_dirs(sk, eps, R=10):
-    """Unit vector at each endpoint pointing AWAY from its line (endpoint - local centroid).
-    Robust for both straight and gently curved strokes."""
-    ys, xs = np.nonzero(sk)
-    tree = cKDTree(np.c_[ys, xs])
+    """Unit vector at each endpoint pointing AWAY from its line: endpoint minus the centroid of
+    the last R pixels of its OWN stroke.
+
+    The centroid used to be taken over every skeleton pixel within R of the endpoint. That
+    includes the line the stub is about to meet: for a stub ending 2-8 px short of a crossing
+    border, the border's pixels outweighed the stub's own, the centroid landed BEYOND the
+    endpoint and the vector flipped -- so pass 2 cast its ray backwards into the stub, "hit" it
+    at step 2, and reported a link without drawing anything. Short T-gaps were never bridged."""
     dirs = np.zeros((len(eps), 2))
-    near = tree.query_ball_point(eps, R)
-    for k, (ep, idx) in enumerate(zip(eps, near)):
-        pts = np.c_[ys[idx], xs[idx]]
-        v = ep - pts.mean(axis=0)
+    for k, ep in enumerate(eps):
+        own = walk_back(sk, ep, R)
+        if not own:
+            continue
+        v = np.asarray(ep, float) - np.asarray(own, float).mean(axis=0)
         n = np.hypot(v[0], v[1])
         if n > 1e-6:
             dirs[k] = v / n
@@ -91,15 +127,27 @@ def bridge_ep_line(sk, eps, dirs, used, max_gap, cos_thr):
         if not d.any():
             continue
         r0, c0 = float(ep[0]), float(ep[1])
+        pr, pc = int(round(r0 + d[0])), int(round(c0 + d[1]))
         for step in range(2, max_gap + 1):
             r, c = int(round(r0 + d[0] * step)), int(round(c0 + d[1] * step))
             if not (0 <= r < H and 0 <= c < W):
                 break
+            hit = None
             if sk[r, c]:                      # ray reached existing line
-                rr, cc = draw_line(int(ep[0]), int(ep[1]), r, c)
+                hit = (r, c)
+            elif step > 2 and r != pr and c != pc:
+                # a diagonal step can slip BETWEEN two pixels of an 8-connected diagonal line
+                # without landing on either; the two cells it squeezes past are the line
+                if sk[pr, c]:
+                    hit = (pr, c)
+                elif sk[r, pc]:
+                    hit = (r, pc)
+            if hit is not None:
+                rr, cc = draw_line(int(ep[0]), int(ep[1]), hit[0], hit[1])
                 sk[rr, cc] = 1
                 nb += 1
                 break
+            pr, pc = r, c
     return nb
 
 

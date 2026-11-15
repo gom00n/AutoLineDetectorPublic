@@ -23,6 +23,23 @@ OPTIONAL = ("dehair", "desymbol", "collapse", "snap", "parcels")   # off by defa
 NOISE = ("code page", "Code page", "codepage", "FutureWarning", "warnings.warn",
          "memory leak", "swig/python")
 
+def sheet_problem(srcdir, stem):
+    """Why sheet `stem` cannot be read from `srcdir`, or None when it can.
+
+    A sheet is delivered either as .tif + .tfwx or as .jpg + .jgwx, and extract_9a reads both
+    (source_paths). The preflight used to accept only the .tif form, so a single .jpg-only sheet
+    blocked a whole batch that extract would have processed."""
+    seen_scan = None
+    for ext, wext in ((".tif", ".tfwx"), (".jpg", ".jgwx")):
+        if os.path.exists(os.path.join(srcdir, stem + ext)):
+            if os.path.exists(os.path.join(srcdir, stem + wext)):
+                return None
+            seen_scan = seen_scan or (ext, wext)
+    if seen_scan:
+        return "world file missing: %s%s in %s" % (stem, seen_scan[1], srcdir)
+    return "scan not found: %s.tif / %s.jpg in %s" % (stem, stem, srcdir or "(no Input folder)")
+
+
 HELP = {
     "mode": "Project preset. ALL projects use the same Motzag-GDB engine and differ only by ink and "
             "default folders. black-ink = BLACK ink (global brightness threshold). red-ink = RED ink "
@@ -422,7 +439,10 @@ class App:
         if self.stage["merge"].get():
             cmds.append(("merge", BASE, [ex("merge_lines.py"), tr, mg, "0"]))
         if self.stage["filter"].get():
-            cmds.append(("filter", BASE, [ex("filter_components.py"), mg, final, get("min_comp"), get("simp_m")]))
+            # merge is optional (it is the one arcpy stage). Without it there is no _mg.shp,
+            # so filter must read the trace output directly.
+            filt_in = mg if self.stage["merge"].get() else tr
+            cmds.append(("filter", BASE, [ex("filter_components.py"), filt_in, final, get("min_comp"), get("simp_m")]))
         snap_in = final
         if self.stage["dehair"].get():
             cmds.append(("dehair", BASE, [ex("dehair_lines.py"), final, dh, get("hair"), get("passes")]))
@@ -466,10 +486,9 @@ class App:
         src = self.v["srcdir"].get().strip()
         if self.stage["extract"].get():
             for s in stems:
-                if not os.path.exists(os.path.join(src, s + ".tif")):
-                    probs.append("scan not found: %s.tif in %s" % (s, src or "(no Input folder)"))
-                elif not os.path.exists(os.path.join(src, s + ".tfwx")):
-                    probs.append("world file missing: %s.tfwx in %s" % (s, src))
+                p = sheet_problem(src, s)
+                if p:
+                    probs.append(p)
             if not self.v["layers"].get().strip():
                 probs.append("Corridor GDB layers not set (use 'Choose…' next to GDB layers)")
         checks = []                                   # (label, gdb path, comma-separated layers)

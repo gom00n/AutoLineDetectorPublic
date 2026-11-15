@@ -116,13 +116,15 @@ def _trace(sk, min_spur, min_loop, simplify_px):
     alab, an = ndimage.label(arcs_mask, structure=_3)
     objs = ndimage.find_objects(alab)
 
-    def junc_label_near(p):
+    def junc_labels_near(p):
+        """Distinct junction labels touching pixel p, in neighbour order."""
         r, c = p
+        out = []
         for dr, dc in NB8:
             jl = jlab[r + dr, c + dc]
-            if jl:
-                return jl
-        return 0
+            if jl and jl not in out:
+                out.append(jl)
+        return out
 
     out_arcs, n_spur, n_loop = [], 0, 0
     for cid in range(1, an + 1):
@@ -134,7 +136,21 @@ def _trace(sk, min_spur, min_loop, simplify_px):
         path = _order([tuple(p) for p in coords])
         plen = len(path)
         a, b = path[0], path[-1]
-        ja, jb = junc_label_near(a), junc_label_near(b)         # 0 = free end
+        la, lb = junc_labels_near(a), junc_labels_near(b)
+        ja, jb = (la[0] if la else 0), (lb[0] if lb else 0)     # 0 = free end
+        if ja and ja == jb:
+            # A very short arc can touch TWO junction blobs with the same pixel (always, when
+            # it is 1 px long: a == b). Taking the first label for both ends made it look
+            # like a bubble off one junction, so it was dropped as a loop -- cutting a 3-4 px
+            # hole in a border that runs through two T-junctions a few pixels apart. Prefer
+            # the reading in which the arc LINKS two different junctions.
+            other = [l for l in lb if l != ja]
+            if other:
+                jb = other[0]
+            else:
+                other = [l for l in la if l != jb]
+                if other:
+                    ja = other[0]
         free_a, free_b = (ja == 0 and deg[a] <= 1), (jb == 0 and deg[b] <= 1)
 
         if ja and jb and ja == jb and plen < min_loop:          # bubble off one junction

@@ -57,8 +57,34 @@ def _end_dir(cs, e):
     return v / n if n > 1e-9 else None
 
 
+FACE_COS = 0.5              # one end must point within ~60 deg of its partner to weld...
+AWAY_COS = -0.25            # ...and the other must not point away from it
+
+
+def _toward(lines, i, e, p, q):
+    """Cosine between line i's outward direction at end e (at p) and the direction p -> q."""
+    v = _end_dir(lines[i], e)
+    g = q - p; n = float(np.hypot(*g))
+    if v is None or n < 1e-9:                         # no direction / already coincident
+        return 1.0
+    return float(np.dot(v, g / n))
+
+
+def _facing(lines, i, e, p, j, f, q):
+    """True when the two loose ends plausibly belong together: at least one points AT the other
+    and neither points away. That admits a broken straight line (both point at each other) and
+    a near-miss corner (one points at the other, the other runs square to the gap), and rejects
+    two ends lying side by side."""
+    a, b = _toward(lines, i, e, p, q), _toward(lines, j, f, q, p)
+    return max(a, b) >= FACE_COS and min(a, b) >= AWAY_COS
+
+
 def join_dangles(lines, join_d):
-    """Weld pairs of facing loose ends within join_d at their midpoint (in place)."""
+    """Weld pairs of FACING loose ends within join_d at their midpoint (in place).
+
+    Facing is checked, not assumed (see _facing). Nearness alone welds the ends of two
+    parallel lines a couple of metres apart -- a doubled road casing -- into a closed sliver,
+    and can pair a dead end with whatever stub happens to lie beside it."""
     deg = _degrees(lines)
     ends = [[i, e, np.array(cs[e], float)] for i, cs in enumerate(lines) for e in (0, -1)
             if deg[_key(cs[e])] == 1]
@@ -75,7 +101,7 @@ def join_dangles(lines, join_d):
             if j == i and LineString(lines[i]).length <= 4 * join_d:
                 continue                              # don't fold a short line onto itself
             d = float(np.hypot(*(p - q)))
-            if d < bd:
+            if d < bd and _facing(lines, i, e, p, j, f, q):
                 bd, best = d, b
         if best is None:
             continue

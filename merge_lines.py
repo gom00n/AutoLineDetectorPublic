@@ -1,11 +1,13 @@
 """Merge touching polylines into longer continuous lines, then straighten (base arcpy python).
 
-RasterToPolyline splits the border mesh at every junction, so one border becomes many short
-features. UnsplitLine dissolves all features that meet at a 2-valent node (a simple pass-through)
-into a single polyline -- it stops only at true 3+ junctions, where merging would be ambiguous.
-SimplifyLine (POINT_REMOVE) then removes the 1-px staircase so lines read straight.
+trace_lines.py emits one feature per junction-to-junction arc, so a border that merely passes
+through 2-valent nodes arrives as several features. Dissolve(UNSPLIT_LINES) joins them into a
+single polyline and stops only at true 3+ junctions, where merging would be ambiguous. It is the
+Basic-license equivalent of UnsplitLine, which is locked (ERROR 000824).
 
-Both tools are core (Data Management / Cartography) and run on a Basic license.
+SimplifyLine is attempted when simplify_m > 0, but it is also Basic-locked, so on this license
+the call falls through to a plain copy; the GUI passes 0 and leaves straightening to
+filter_components.py. This is the only arcpy stage and it is optional (see SETUP.md, Path B).
 
 Usage: python merge_lines.py in_lines.shp out_lines.shp [simplify_m=0.30]
 """

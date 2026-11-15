@@ -11,7 +11,7 @@ import numpy as np
 from shapely.geometry import LineString
 from shapely.ops import unary_union, polygonize
 from collapse_pairs import collapse
-from close_parcels import close
+from close_parcels import close, join_dangles
 
 fails = []
 n_checks = 0
@@ -73,6 +73,27 @@ check("close_ring_selfjoin", nj == 1 and len(polys) == 1 and abs(polys[0].area -
 farlines = [list(LineString([(0, 0), (10, 0)]).coords), list(LineString([(50, 50), (60, 50)]).coords)]
 nd, nj, ne = close(farlines, ext_d=5.0, join_d=3.0)
 check("close_far_untouched", nj == 0 and ne == 0)
+
+# ---------- join: facing is checked, not assumed ----------
+# two PARALLEL lines 2 m apart (a doubled road casing): their ends lie side by side, well inside
+# join_d, and used to be welded into a closed sliver at both ends
+par = [[(0.0, 0.0), (50.0, 0.0)], [(0.0, 2.0), (50.0, 2.0)]]
+nj = join_dangles(par, 3.0)
+check("join_parallel_casing_ends_not_welded", nj == 0 and len(par[0]) == 2 and len(par[1]) == 2,
+      "joined=%d" % nj)
+
+# staggered parallel ends (one casing stops 2 m before the other) are not a pair either
+stag = [[(0.0, 0.0), (50.0, 0.0)], [(0.0, 2.0), (52.0, 2.0)]]
+check("join_staggered_parallel_ends_not_welded", join_dangles(stag, 3.0) == 0)
+
+# a straight border broken by a 2 m gap is still welded
+brk = [[(0.0, 0.0), (20.0, 0.0)], [(22.0, 0.0), (40.0, 0.0)]]
+check("join_collinear_break_still_welded", join_dangles(brk, 3.0) == 1)
+
+# a near-miss corner: one border stops 1 m short of the corner, the other 2 m short of it.
+# Only ONE of them points at the other; the other runs square to the gap. Still a join.
+cor = [[(0.0, 0.0), (9.0, 0.0)], [(10.0, 20.0), (10.0, 2.0)]]
+check("join_near_miss_corner_still_welded", join_dangles(cor, 3.0) == 1)
 
 print()
 if fails:

@@ -78,6 +78,14 @@ def world_to_px(gt, X, Y):
     return (e * dx - b * dy) / det, (-d * dx + a * dy) / det
 
 
+def pixel_size(gt):
+    """True ground size of a pixel in metres: sqrt(|det|) of the geotransform's 2x2 part.
+
+    abs(gt[1]) is the pixel size only on a NORTH-UP grid. On a rotated world file it is
+    m/px * cos(rotation) -- 0.083 against a true 1.015 m/px on one sheet scanned sideways."""
+    return abs(gt[1] * gt[5] - gt[2] * gt[4]) ** 0.5
+
+
 def size_filter(mask, min_px):
     lab, n = ndimage.label(mask, structure=np.ones((3, 3), int))
     sizes = np.bincount(lab.ravel()); keep = sizes >= min_px; keep[0] = False
@@ -176,7 +184,9 @@ def process(stem, ink="black", cap=None, offset=OFFSET, block=BLOCK, purple_db=P
     # 3) read ONE small window PER polygon (the targets are scattered, so a single bbox is useless);
     #    detect ink (black global OR red adaptive) + clip to the buffered polygon, OR into the mask.
     mask = np.zeros((nrows, ncols), np.uint8)
-    buf_px = max(1, int(round(buf_m / abs(gt[1]))))
+    # pixel_size, not abs(gt[1]): on a rotated grid the old form turned a 20 m buffer into
+    # 241 px instead of 20, growing the corridor to fill each polygon's whole window
+    buf_px = max(1, int(round(buf_m / max(pixel_size(gt), 1e-9))))
     struct = ndimage.generate_binary_structure(2, 1)
     read_px = 0
     for g in geoms:
